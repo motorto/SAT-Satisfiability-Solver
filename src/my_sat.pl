@@ -1,7 +1,18 @@
 sat(Expr,Solution,ListaSol) :- createListUnitClauses(Expr,Expr2,ListaSol), 
 	flatten(Expr2,Expr3), sort(Expr3, Expr4),
-	satAux(Expr4,Expr,Expr5),delete(Expr5,[],Expr6),
-	flatten(Expr6,Expr7),sort(Expr7,Solution).
+	satAux(Expr4,Expr,Expr5),delete(Expr5,[],Expr6),checkUnit(Expr6,X,ListaSol,Solution).
+	
+% checkUnit(Expr6, X , ListaSol, Expr7), satAux(X,Expr6,Solution).
+
+
+checkUnit(E,VarUnitarias,ListaSol,Sol) :- checkUnitAux(E,VarUnitarias,ListaSol,Sol) , satAux(E,A,Sol), checkUnit(E,VarUnitarias,Sol).
+checkUnit(E,[],ListaSol,Sol).
+
+
+checkUnitAux([],B,A,NewList).
+checkUnitAux([C|CTail],[C|S],X,NewList) :- length(C,1), append(X,[C-true],NewList)
+	, checkUnitAux(CTail,S,X,NewList) , ! .
+checkUnitAux([C|CTail],S,X,NewList) :- checkUnitAux(CTail,S,X,NewList) , !.
 
 satAux([],Solution,Solution).
 satAux([],[],Solution).
@@ -13,6 +24,7 @@ list_vars([Var | Vars]) :-
 	list_vars(Vars), (propagationOfUnitClause(Var); propagationOfUnitClause(-Var)).
 
 createListUnitClauses([],[],[]).
+% createListUnitClauses([C|[]],[C|S],[C-true|X]) :- length(C,1), ! .
 createListUnitClauses([C|CTail],[C|S],[C-true|X]) :- length(C,1), createListUnitClauses(CTail,S,X) , ! .
 createListUnitClauses([C|CTail],S,X) :- createListUnitClauses(CTail,S,X) , !.
 
