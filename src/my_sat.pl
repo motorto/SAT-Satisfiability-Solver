@@ -1,104 +1,99 @@
-/*
-Exemplos:
-sat([[a,b],[a],[-a,-b,c]],A,X).
-sat([[a,b],[a],[-a,-b,c],[-a,b]],A,X).
-sat([[a,b],[a],[-a,-b,c],[d,k]],A,X).
+% Gnu Prolog não se queixa, 
+% mas o yap queixa-se por isso fica aqui comentado 
+% para facilitar a vida ao prof. 
+% (Sim testei no incrivel compilador yap)
+%
+%
+% :- use_module(library(lists)).
 
-*/
+sat(Expr,Ans) :- 
+	get_literals(Expr,Lts),
+	sol(Lts,Expr,S),
+	sort(S,Ans).
 
-sat(Expr,R,S) :- createListUnitClauses(Expr,Expr2,ListaSol),
-	flatten(Expr2,Expr3), sort(Expr3, Expr4),
-	satAux(Expr4,Expr,_,Expr5), delete(Expr5,[],Expr6), checkUnit(Expr6,Resultado,_,ListaSol,Solution),
-	verifica(Resultado,Solution, R,S).
+sol([],_,[]).
+sol([L|Ls],Expr,[S1|S]) :- 
+	append([[L]],Expr,TExp), 
+	sol_aux(TExp,[],UnsSol), 
+	sort(UnsSol,S1), 
+	sol(Ls,Expr,S),
+	!.
 
+% Exp,Solucao, SolucaoParaCima <-- Talvez exista uma maneira melhor
+% Este predicado é o que aplica o "algoritmo DLPP" por assim dizer.
+%
+% Comecamos por verificar se à cabeça da expressão temos unitarios (Temos
+% sempre no primeiro caso pq adicionamos o Literal no "sol"
+%
+% Propagar ---> Adicionar lá o L-true 
+% E chamar recursivamente.
+%
+% Para a 3 entrada do predicado, é onde está a magia (obrigado Bernardo) 
+%
+% nos pegamos num literal que está na cabeça da expressão,
+%
+% [[a,b],[b,c]] ,  ficamos com o "a"
+%
+% e agora a magia é propagamos para "a" OU propagamos para -a, 
+% (fica qual eliminar alguma cena), se eliminarem os dois ficam os dois 
+% é tão giro o prolog ...
+% e chamamos recursivamente.
 
+sol_aux([[]],S,S). % Está aqui por causa deste caso: --> sat([[c],[b,-c]],S)
+sol_aux([],S,S).
+sol_aux(Exp,S,UpSolution) :- 
+	check_unit(Exp,L,RExp),
+	L \==[],
+	propagate(L,Exp,ExprP),
+	add_solution(L,S,S2),
+	sol_aux(ExprP,S2,UpSolution),!.
+sol_aux(Exp,S,UpSolution) :- 
+	pick_literal(TmpExpr,L),
+	(
+	(
+		propagate(L,Exp,ExprP),
+		add_solution(L,S,S2)
+	)
+	;
+	(
+		get_simtetric(L,LInverted)),
+		propagate(LInverted,Exp,ExprP),
+		add_solution(LInverted,S,S2)
+	),
+	sol_aux(ExprP,S2,UpSolution),!.
+	
 
-verifica([], Solution, [], Solution).
-verifica(Resultado, Solution, R, S) :- flatten(Resultado,ListaVars),
-												sort(ListaVars, NovaListVars),
-												removeNeg(NovaListVars, List), todasOp(List, List2),
-												propagation(List2, Resultado, Solution, R, S).
+% Adicona na solucao aquele literal a true.
+add_solution(K,L,R) :- K\==[], \+member(K-true,L), append([K-true],L,R).
 
+% Gets all literals
+% (Expr, ListofLiteral)
+get_literals(Expr,X) :- flatten(Expr,R), sort(R,X).
 
-todasOp([],[]).
-todasOp([L|Ls], [L,-L|S]) :- todasOp(Ls,S).
+% Picks the first literal of Expr
+pick_literal([[X|Xs]|Xss],X).
 
-/*
-%resultado =  exp
-%solution = a-true
-%list2 = var e -var para todas  b,-b,c,-c
-*/
+% Returns Literal at the head of Expr if its unitary else
+% returns empty
+check_unit([[X|Xs]|Xss],X,Xss) :- length(Xs,0), !.
+check_unit(X,[],X).
 
+% Propagate Unit
+propagate(A,[],[]).
+propagate(A,[X|Xs],R) :-
+	member(A,X),
+	propagate(A,Xs,R).
+propagate(A,[X|Xs],[Xr|R]) :-
+	remove_literal(A,X,Xr),
+	propagate(A,Xs,R), !.
 
-propagation([], _, _,Solution2, Solution2).
-propagation([List2], Resultado, Solution, Resultado2, Solution2) :-
-					propagationAux(List2, Resultado, Sol),
-					append(Solution, [[List2] - true], FinalResult),
-					prop([List2], Resultado, Solution, Sol, FinalResult, Solution2).
-propagation([List2|TailList], Resultado, Solution, Resultado2, Solution2) :-
-          propagationAux(List2, Resultado, Sol),
-					append(Solution, [[List2] - true], FinalResult),
-					prop([List2|TailList], Resultado, Solution, Sol, FinalResult, Solution2).
+% (Literal, Expression , NewExpression)
+remove_literal(V,[],[]). % Outro caso que está a bater mas caguei mesmo --> propagate(b,[[b],[]],S).
+remove_literal(V,[E|Es],[]):- member(V,[E|Es]).
+remove_literal(V,[E|Es],R):- member(-V,[E|Es]), delete([E|Es],-V,R),!. 
+remove_literal(-V,[E|Es],R):- member(V,[E|Es]), delete([E|Es],V,R),!.
+remove_literal(V,[E|Es],[E|Es]).
 
-
-
-prop([], _, _, Solution2, Solution2, Solution2).
-prop([List2|TailList], Resultado ,Solution, [[]], FinalResult, Solution2) :-
-    propagation(TailList, Resultado, Solution, Sol, [FinalResult|Solution2]).
-
-prop([List2|TailList], Resultado, Solution, Sol, FinalResult, Solution2) :-
-      checkUnit(Sol, SolFinal, VarUnitarias, FinalResult, F), write(F),
-      propagation(TailList, Resultado, Solution, Sol, [F|Solution2]).
-
-propagationAux(List2, Sol, Sol3) :- propagationOfUnitClause(Sol, List2, Sol, Sol3).
-propagationAux(List2, Sol, []) :- !.
-
-
-satAux([],Solution,Solution,Solution).
-satAux([],A,B,A).
-satAux([X|TailListUnit],Expr,Solution,FinalExpr) :- removeUnitClauses(Expr,X,Expr2)
-	,propagationOfUnitClause(Expr2,X,Expr2,Expr3) , satAux(TailListUnit,Expr3,Solution,FinalExpr), !.
-satAux([],[],Solution,[]).
-
-removeNeg([],[]).
-removeNeg([-A|As],[A|L]) :- removeNeg(As,L).
-removeNeg([A|As],[A|L]) :- removeNeg(As,L).
-
-
-checkUnit([],[],_,Sol,Sol):- !.
-checkUnit(E,ES,VarUnitarias,ListaSol,Sol1) :- checkUnitAux(E,VarUnitarias,ListaSol,Sol), VarUnitarias \==[] ,
-        flatten(VarUnitarias,Vars), satAux(Vars,E,Sol,E1), checkUnit(E1,ES,_,Sol,Sol1).
-checkUnit(A,A,[],Sol,Sol) :- !.
-
-
-checkUnitAux([],[],A,NewList).
-checkUnitAux([],B,A,NewList).
-checkUnitAux([C|CTail],[C|[]],X,NewList) :- length(C,1), append(X,[C-true],NewList)
-	, checkUnitAux(CTail,S,X,NewList) , ! .
-checkUnitAux([C|CTail],S,X,NewList) :- checkUnitAux(CTail,S,X,NewList) , !.
-
-createListUnitClauses([],[],[]).
-createListUnitClauses([C|CTail],[C|S],[C-true|X]) :- length(C,1), createListUnitClauses(CTail,S,X) , ! .
-createListUnitClauses([C|CTail],S,X) :- createListUnitClauses(CTail,S,X) , !.
-
-removeUnitClauses([],[],[]).
-removeUnitClauses(Expr,Var,Expr2) :- delete(Expr,[Var],Expr2).
-
-propagationOfUnitClause([],Var,Expr,[]).
-propagationOfUnitClause([],-Var,Expr,[]).
-propagationOfUnitClause([E|Es],-Var,Expr,[SolAux|Sol]):- propagationOfNegativeUnitClauseAux(E,-Var,E,SolAux) ,
-                       propagationOfUnitClause(Es,-Var,Expr,Sol).
-propagationOfUnitClause([E|Es],Var,Expr,[SolAux|Sol]):- propagationOfUnitClauseAux(E,Var,E,SolAux),
-	propagationOfUnitClause(Es,Var,Expr,Sol), !.
-
-propagationOfUnitClauseAux([],[],[],[]).
-propagationOfUnitClauseAux([],Var,Expr,Expr).
-propagationOfUnitClauseAux([Elem|Tail],Var,Expr,[]) :- Elem == Var.
-propagationOfUnitClauseAux([Elem|Tail],Var,Expr,Expr2) :- Elem == -Var, delete(Expr,Elem,Expr2).
-propagationOfUnitClauseAux([_|Tail],Var,Expr,Expr2) :- propagationOfUnitClauseAux(Tail,Var,Expr,Expr2).
-
-propagationOfNegativeUnitClauseAux([],[],[],[]).
-propagationOfNegativeUnitClauseAux([],-Var,Expr,Expr).
-propagationOfNegativeUnitClauseAux([Elem|Tail],-Var,Expr,[]) :- Elem == -Var.
-propagationOfNegativeUnitClauseAux([Elem|Tail],-Var,Expr,Expr2) :- Elem == Var, delete(Expr,Elem,Expr2).
-propagationOfNegativeUnitClauseAux([_|Tail],Var,Expr,Expr2) :- propagationOfNegativeUnitClauseAux(Tail,Var,Expr,Expr2).
+%converts an atom to its simetric
+get_simtetric(-L,L).
+get_simtetric(L,-L).
