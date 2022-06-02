@@ -13,18 +13,15 @@ sat(Expr,R,S) :- createListUnitClauses(Expr,Expr2,ListaSol),
 
 
 
-verifica([], Solution, [], Solution, Solution).
-verifica(Resultado, Solution, R, S, S1):- flatten(Resultado,ListaVars),
+verifica([], Solution, [], Solution).
+verifica(Resultado, Solution, R, S) :- flatten(Resultado,ListaVars),
 												sort(ListaVars, NovaListVars),
 												removeNeg(NovaListVars, List), todasOp(List, List2),
-												propagation(List2, Resultado, Solution, R, [], S1),
-												%trolhice
-												verifica([], [], [], R, [], S1).
-verifica([], [], R, S1, S1).
+												propagation(List2, Resultado, Solution, R, S).
 
 
 todasOp([],[]).
-todasOp([L|Tail], [L,-L|L1]) :- todasOp(Tail,L1).
+todasOp([L|Ls], [L,-L|S]) :- todasOp(Ls,S).
 
 /*
 %resultado =  exp
@@ -33,23 +30,25 @@ todasOp([L|Tail], [L,-L|L1]) :- todasOp(Tail,L1).
 */
 
 
-propagation([], _, _,[], Solution2, Solution2).
-propagation([List2], Resultado, Solution, Resultado2, Solution2, FIM) :-
+propagation([], _, _,Solution2, Solution2).
+propagation([List2], Resultado, Solution, Resultado2, Solution2) :-
 					propagationAux(List2, Resultado, Sol),
 					append(Solution, [[List2] - true], FinalResult),
 					prop([List2], Resultado, Solution, Sol, FinalResult, Solution2).
-propagation([List2|TailList], Resultado, Solution, Resultado2, Solution2, FIM) :-
+propagation([List2|TailList], Resultado, Solution, Resultado2, Solution2) :-
           propagationAux(List2, Resultado, Sol),
 					append(Solution, [[List2] - true], FinalResult),
-					prop([List2|TailList], Resultado, Solution, Sol, FinalResult, Solution2, FIM).
-					
-prop([], _, _, Solution2, Solution2).
-prop([List2|TailList], Resultado ,Solution, [[]], FinalResult, Solution2, FIM) :-
-    propagation(TailList, Resultado, Solution, Sol, [FinalResult|Solution2], FIM).
+					prop([List2|TailList], Resultado, Solution, Sol, FinalResult, Solution2).
 
-prop([List2|TailList], Resultado, Solution, Sol, FinalResult, Solution2, FIM) :-
-      checkUnit(Sol, SolFinal, VarUnitarias, FinalResult, F),
-      propagation(TailList, Resultado, Solution, Sol, [F|Solution2], FIM).
+
+
+prop([], _, _, Solution2, Solution2, Solution2).
+prop([List2|TailList], Resultado ,Solution, [[]], FinalResult, Solution2) :-
+    propagation(TailList, Resultado, Solution, Sol, [FinalResult|Solution2]).
+
+prop([List2|TailList], Resultado, Solution, Sol, FinalResult, Solution2) :-
+      checkUnit(Sol, SolFinal, VarUnitarias, FinalResult, F), write(F),
+      propagation(TailList, Resultado, Solution, Sol, [F|Solution2]).
 
 propagationAux(List2, Sol, Sol3) :- propagationOfUnitClause(Sol, List2, Sol, Sol3).
 propagationAux(List2, Sol, []) :- !.
